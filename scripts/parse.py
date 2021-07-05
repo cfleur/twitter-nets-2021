@@ -1,15 +1,17 @@
+from pathlib import Path
 import glob
 import json
 import pandas as pd
 
-def parse_tweets(pattern, rpath, root, v=False):
+def parse_tweets(pattern, reldir, root, v=False, fwrite=False, fwritedir=None):
     '''
     pattern = '*_data_*.json'
-    rpath = 'data/twitterdata/'
+    reldir = 'data/twitterdata/'
     root = './'
+    fwritedir = 'output/parse/'
     '''
 
-    imatches = glob.iglob(root+rpath+pattern)
+    imatches = glob.iglob(root + reldir + pattern)
     retweets = []
     original_tweets = []
     data_issue = []
@@ -54,5 +56,22 @@ def parse_tweets(pattern, rpath, root, v=False):
             file_count += 1
 
     v and print('***\n {} files parsed.\n***'. format(file_count))
+
+    if fwrite:
+        Path(root + fwritedir).mkdir(parents=True, exist_ok=True)
+
+        datasets = [retweets, original_tweets, data_issue]
+        names = ['retweets', 'original_tweets', 'data_issue']
+        
+        for n, d in zip(names, datasets):
+            fname = n + '.json'
+            
+            with open(root + fwritedir + fname, 'w') as f:
+                json.dump(d, f)
+
+            v and print('wrote file {}'. format(root + fwritedir + fname))
+
+        return
+
 
     return retweets, original_tweets, data_issue
