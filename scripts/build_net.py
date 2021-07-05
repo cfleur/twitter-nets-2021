@@ -1,4 +1,5 @@
 from time import time
+from collections import Counter
 from datetime import timedelta
 import pandas as pd
 import numpy as np
@@ -73,7 +74,42 @@ def source_to_target(tweetsdf, retweetsdf, ref_col='referenced_tweet_id', id_col
     return connectionlist, data_issues, non_match_tracker
 
 
-def write_edgelist(connectionlist, filepath):
+def write_edgelist(connectionlist, filepath, v=True, vv=False):
     '''Writes edgelist file. '''
-    pass
+    
+    c = Counter()    
+    connectiondf = pd.DataFrame(connectionlist)
+    setname = 'sourcetargetfs'
+    links = []
 
+    # transform connection list into frozen set
+    connectiondf[setname] = [frozenset([i, j]) for i, j in zip(connectiondf['source'], connectiondf['target'])]
+
+    # count occurances of each set
+    for fs in connectiondf[setname]:
+        c[fs] += 1
+
+    for i in c.items():
+
+        if len(i[0]) == 1:
+            # author retweeted/replied/quoted themselves
+            # network does not have self loops
+            pass
+        
+        elif len(i[0]) == 2:
+            # correct length
+            sourcetarget = list(i[0])
+            source = sourcetarget[0]
+            target = sourcetarget[1]
+            count = i[1]
+            link = source + ' ' + target + ' ' + str(count) + '\n'
+            vv and print(link)
+            links.append(link)
+
+        else:
+            print('source target length issue:\n{}'. format(i))
+
+    v and print('{} links recorded. Example link:\n{}\n\nWriting to file {}.'. format(len(links), links[100], filepath))
+
+    with open(filepath, 'w') as f:
+        f.writelines(links)
