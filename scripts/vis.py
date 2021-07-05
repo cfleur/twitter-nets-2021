@@ -128,8 +128,7 @@ def vis_net_stats(rtg, htg, compute_paths=False, overviewfp=None, clusteringfp=N
         
 
 
-def vis_net(edgelistfp, _pos=None, recomputepos=False, niter=None, posfp=None, lcc_only=False, gexffp=None, visnetfp=None, title='', v=False):
-    g = nx.read_weighted_edgelist(edgelistfp)
+def vis_net(g, _pos=None, recomputepos=False, niter=None, posfp=None, lcc_only=False, gexffp=None, visnetfp=None, title='', v=False):
     
     if recomputepos:
         forceatlas2 = ForceAtlas2()
@@ -144,10 +143,10 @@ def vis_net(edgelistfp, _pos=None, recomputepos=False, niter=None, posfp=None, l
     else:
         pos = _pos
 
-    if lcc_only:
-        largest_cc = max(nx.connected_components(g), key=len)
-        h = deepcopy(g.subgraph(largest_cc))
-        g = h
+    #if lcc_only:
+    #    largest_cc = max(nx.connected_components(g), key=len)
+    #    h = deepcopy(g.subgraph(largest_cc))
+    #    g = h
 
     gexffp and nx.write_gexf(g, gexffp)
 
@@ -162,20 +161,26 @@ def vis_net(edgelistfp, _pos=None, recomputepos=False, niter=None, posfp=None, l
                 with_labels=False, 
                 nodelist=nodes, 
                 edgelist=edges,
-                node_size=42,
+                node_size=18,
                 linewidths=.42,
                 node_color=strengths, 
                 edge_color=weights, 
                 cmap=cmap, 
-                vmin=min(strengths),
-                vmax=max(strengths),
+                vmin=np.quantile(strengths,0),
+                vmax=np.quantile(strengths,.9),
+                edge_vmin=np.quantile(weights,0),
+                edge_vmax=np.quantile(weights,.5),
                 alpha=alpha
                 )
 
         fig = plt.figure(figsize=(9, 9))
-        fig.suptitle(title)
+        #fig.suptitle(title)
+        ax = fig.add_subplot(1,1,1)
+        ax.set(title=title)
         print('Drawing figure')
-        nx.draw_networkx(g, pos, **params)
+        nx.draw_networkx(g, pos, ax=ax, **params)
+        #fig.colorbar()
+        plt.axis('off')
         fig.savefig(visnetfp)
         print('Figure {} written to {}'. format(title, visnetfp))
 
