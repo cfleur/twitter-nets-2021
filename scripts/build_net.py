@@ -1,9 +1,11 @@
 from time import time
 from collections import Counter
 from datetime import timedelta
+import json
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
+import itertools as it
 
 
 
@@ -152,34 +154,49 @@ def process_hashtags(tweetsdf, tag_col='tags', tagusefp=None, tagspertweetfp=Non
         v and print('------\nFigure "{}" has been written to {}'. format(title, tagspertweetfp))
 
     # hashtags used in a tweet without any other hashtags are not a part of the network
-    hashtagsdf = tweets_with_multiple_tags[tag_col]
+    hashtags = tweets_with_multiple_tags[tag_col]
 
-    return hashtagsdf, tag_counts
+    return hashtags, tag_counts
 
 
 
-def ht_source_to_target(hashtagsdf, v=False):
+def ht_source_to_target(hashtags, htconnectionlistfp=None, v=False):
     '''
     A hashtag is linked to another if they appreared in the same tweet
     Parameters
     ----------
-    hashtagsdf: dataframe (tags column of tweetsdf)
+    hashtags: series/list-like (tags column of tweetsdf)
     '''
 
     # check length of tag arrays
-    v and print('Min length tag array: {}. Max length tag array: {}.'. format(min(hashtagseries.str.len()), max(hashtagseries.str.len())))
+    v and print('Min length tag array: {}. Max length tag array: {}.'. format(min(hashtags.str.len()), max(hashtags.str.len())))
+   
+    combinationsdf = hashtags.apply(lambda x: [c for c in it.combinations(x,2)])
+
+    # check length of tag combination arrays (number of combinations = n(n-1)/2)
+    v and print('Min length tag combination array: {}. Max length tag combination array: {}. Number of combinations = n(n-1)/2'. format(min(combinationsdf.str.len()), max(combinationsdf.str.len())))
     
-    
+    # number of pairs
+    num_of_pairs = sum(combinationsdf.str.len())
+    htconnectionlist = [{'source': i[0], 'target': i[1]} for i in it.chain(*combinationsdf.values)]
+    v and print('{} connections recorded (should be {}).'. format(num_of_pairs, len(htconnectionlist)))
+
+    if htconnectionlistfp:
+        with open(htconnectionlistfp, 'w') as f:
+            json.dump(htconnectionlist, f)
+        v and print('-----\nHashtag connectionlist written to file {}.'. format(htconnectionlistfp))
+
+    return htconnectionlist
 
 
-def write_edgelist(connectionlist, writefile=False, filepath=None, v=True, vv=False):
+def write_edgelist(connectionlist, filepath=None, v=True, vv=False):
     '''Writes edgelist file. '''
     
     c = Counter()    
     connectiondf = pd.DataFrame(connectionlist)
     setname = 'sourcetargetfs'
     links = []
-    self_rt = 0
+    self_ref = 0
 
     # transform connection list into frozen set
     connectiondf[setname] = [frozenset([i, j]) for i, j in zip(connectiondf['source'], connectiondf['target'])]
@@ -197,8 +214,9 @@ def write_edgelist(connectionlist, writefile=False, filepath=None, v=True, vv=Fa
 
         if len(i[0]) == 1:
             # author retweeted/replied/quoted themselves
+            # hashtag used twice
             # network does not have self loops
-            self_rt += 1
+            self_ref += 1
         
         elif len(i[0]) == 2:
             # correct length
@@ -213,10 +231,10 @@ def write_edgelist(connectionlist, writefile=False, filepath=None, v=True, vv=Fa
         else:
             print('source target length issue:\n{}'. format(i))
 
-    v and print('------\n{} ({:.2f}%) are self- retweets/replies/qoutes.\nThese are not included in the edgelist (no self-loops).'. format(self_rt, self_rt/len(unique_connections)*100))
-    v and print('------\n{} links recorded. Example link:\n{}'. format(len(links), links[10]))
+    v and print('------\n{} ({:.2f}%) are self-references (for tweet network author retweets/replies/qoutes themselves, for hashtags, tag is used twice in the same tweet).\nThese are not included in the edgelist (no self-loops).'. format(self_ref, self_ref/len(unique_connections)*100))
+    v and print('------\n{} links recorded. Example link:\n{}'. format(len(links), links[-10]))
 
-    if writefile:
+    if filepath:
         with open(filepath, 'w') as f:
             f.writelines(links)
         v and print('-----\nEdgelist written to file {}.'. format(filepath))
