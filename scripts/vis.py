@@ -5,7 +5,9 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import pandas as pd
 import numpy as np
+import matplotlib
 import json
+import warnings
 
 def parse_net_components(rtedgelistfp, htedgelistfp, figfp=None, figtitle='Distribution of connected component sizes', v=True):
     rt_g = nx.read_weighted_edgelist(rtedgelistfp)
@@ -18,75 +20,112 @@ def parse_net_components(rtedgelistfp, htedgelistfp, figfp=None, figtitle='Distr
     ht_largest_cc = max(nx.connected_components(ht_g), key=len)
     ht_h = deepcopy(ht_g.subgraph(ht_largest_cc))
 
-    sns.set_theme(style='whitegrid', font_scale=.5)
-    fig = plt.figure(figsize=(6,8))
-    fig.suptitle(figtitle)
-    axs = fig.subplots(1,2, sharey=False)
-    params = dict(color='navy', alpha=.82, log=True)
-    for ax, title, ylab, connected in zip(axs, ('Retweet network', 'Hashtag network'), ('component size', ''), (rt_connected, ht_connected)):
-        sns.countplot(y=connected, ax=ax, **params)
-        ax.set(title=title, ylabel=ylab, xlabel='occurances')
-    #fig.tight_layout()
+    if figfp:
+        sns.set_theme(style='whitegrid', font_scale=.5)
+        fig = plt.figure(figsize=(6,8))
+        fig.suptitle(figtitle)
+        axs = fig.subplots(1,2, sharey=False)
+        params = dict(color='navy', alpha=.82, log=True)
+        for ax, title, ylab, connected in zip(axs, ('Retweet network', 'Hashtag network'), ('component size', ''), (rt_connected, ht_connected)):
+            sns.countplot(y=connected, ax=ax, **params)
+            ax.set(title=title, ylabel=ylab, xlabel='occurances')
+        #fig.tight_layout()
 
-    try:
-        fig.savefig(figfp)
-        print('Figure {} saved to {}'. format(figtitle, figfp))
-    except Exception as e:
-        print(e)
+        try:
+            fig.savefig(figfp)
+            print('Figure {} saved to {}'. format(figtitle, figfp))
+        except Exception as e:
+            print(e)
 
     return dict(rt_g=rt_g, rt_h=rt_h, ht_g=ht_g, ht_h=ht_h)
 
 
 
-def vis_net_stats(edgelistfp, figfp=None, title='', v=False):
+def vis_net_stats(rtg, htg, compute_paths=False, overviewfp=None, clusteringfp=None, v=True, vv=False):
     
-    g = nx.read_weighted_edgelist(edgelistfp)
+    #sns.set_theme(style='whitegrid', font_scale=.5)
+    matplotlib.rc_file_defaults()
+    fig = plt.figure(figsize=(6,6))
+    axs = fig.subplots(2, 2)
+    params = dict(color='navy', alpha=.82)
 
-    # Node strength (degree disrtibution)
+    data = {}
+    # note order of nodes and edges are not necessary for visualising histograms
 
-    # Edge weight distribution
+    ### Stat overview ###
+    if overviewfp:
+        suptitle = 'Distribution of network statistics'
+        fig.suptitle(suptitle)
 
-    # Clustering coefficient distribution
+        for g, name in zip((rtg,htg), ('retweets', 'hashtags')):
+            # Node strength (degree disrtibution)
+            strengths = [g.degree(n, weight='weight') for n in g.nodes()]
+            data[name+'_strengths'] = strengths
+            v and print('{} strengths recorded.'. format(name+'_strengths'))
+
+            # Edge weight distribution
+            weights = [e[2]['weight'] for e in g.edges(data=True)]
+            data[name+'_weights'] = weights
+            v and print('{} weights recorded.'. format(name+'_weights'))
+
+            # Shortest path lengths
+            if compute_paths:
+                warnings.warn('Processing shortest path is slow, use smallest reasonable component.')
+                if not nx.is_connected(g):
+                    raise nx.NetworkXError("Graph is not connected.")
+                aspl = nx.average_shortest_path_length(h, weight='weight')
+                print('Average shortest path length of largest connected component is {}.' .format(aspl))
+
+        # histogram
+        subtitles = ['Retweet node strengths', 'Retweet edge weights', 'Hashtag node strengths', 'Hashtag edge weights']
+        for ax, title, ylab, d in zip(axs.flat, subtitles, ('observations', '', 'observations', ''), (data['retweets_strengths'], data['retweets_weights'], data['hashtags_strengths'], data['hashtags_weights'])):
+            vv and print(len(d), ax, title)
+            ax.hist(d, bins=300, **params)
+            ax.set(title=title, ylabel=ylab, yscale='log')
+            ax.grid(axis='y', linestyle='--', linewidth=.42)
+        fig.tight_layout()
+        
+        try:
+            fig.savefig(overviewfp)
+            print('Figure {} saved to {}'. format(suptitle, overviewfp))
+        except Exception as e:
+            print(e)
     
-    # connected components
-    connected = [len(c) for c in sorted(nx.connected_components(g), key=len, reverse=True)]
+    ### Clustering ###
+    if clusteringfp:
+        suptitle = 'Distribution of clustering coefficients'
+        fig.suptitle(suptitle)
 
-    # Shortest path lengths
-    # need efficient way to get the node pairs to show this distribution
-    largest_cc = max(nx.connected_components(g), key=len)
-    h = deepcopy(g.subgraph(largest_cc))
-    #aspl = nx.average_shortest_path_length(h, weight='weight')
-    #print('Average shortest path length of largest connected component ({} nodes, {:.2f}%) is {}.' .format(len(largest_cc), len(largest_cc)/len(g)*100, aspl))
+        for g, name in zip((rtg,htg), ('retweets', 'hashtags')):
+            clustering = [i for i in nx.clustering(g, weight='weight').values()]
+            data[name+'_full_clustering'] = clustering
+            v and print('{} clustering coefficients computed'. format(name+'_full_clustering'))
 
-    # Degree (strength) distribution
-    st = [g.degree(n, weight='weight') for n in g.nodes()]
-    v and print('Strengths computed')
+            # use lcc only
+            largest_cc = max(nx.connected_components(g), key=len)
+            h = deepcopy(g.subgraph(largest_cc))
+            # Clustering coefficient distribution
 
-    # Clustering coefficient distribution
-    cc = [i for i in nx.clustering(g, weight='weight').values()]
-    v and print('Clustering coefficients computed')
+            clustering = [i for i in nx.clustering(h, weight='weight').values()]
+            data[name+'_lcc_clustering'] = clustering
+            v and print('{} clustering coefficients computed'. format(name+'_lcc_clustering'))
+
+        # histogram
+        subtitles = ['Retweet full clustering', 'Retweet lcc clustering', 'Hashtag full clustering', 'Hashtag lcc clustering']
+        for ax, title, ylab, d in zip(axs.flat, subtitles, ('observations', '', 'observations', ''), (data['retweets_full_clustering'], data['retweets_lcc_clustering'], data['hashtags_full_clustering'], data['hashtags_lcc_clustering'])):
+            vv and print(len(d), ax, title)
+            ax.hist(d, bins=300, **params)
+            ax.set(title=title, ylabel=ylab, yscale='log')
+            ax.grid(axis='y', linestyle='--', linewidth=.42)
+        fig.tight_layout()
+
+        try:
+            fig.savefig(clusteringfp)
+            print('Figure {} saved to {}'. format(suptitle, clusteringfp))
+        except Exception as e:
+            print(e)
     
-    fig = plt.figure(figsize=(10,5))
-    fig.suptitle(title)
-    axs = fig.subplots(1,3, sharey=False)
-    params = dict(density=False, color='navy', alpha=1, log=True, align='left', rwidth=1)
-    for ax in axs:
-        ax.grid(axis='y', linestyle='--', linewidth=.42)
-    axs[0].set(title='Connected components', xlabel='component size', ylabel='occurances')
-    axs[0].hist(connected, bins=len(np.unique(st)), **params)
-    axs[1].set(title='Node strength', xlabel='node strength', ylabel='occurances')
-    axs[1].hist(st, bins=len(np.unique(st)), **params)
-    axs[2].set(title='Clustering coefficient', xlabel='clustering coefficient', ylabel='occurances')
-    axs[2].hist(cc, bins=len(np.unique(st)), **params)
-    fig.tight_layout()
-    try:
-        fig.savefig(figfp)
-        print('Figure {} saved to {}'. format(title, figfp))
-    except Exception as e:
-        print(e)
-
-    return connected, st, cc
-
+        
 
 
 def vis_net(edgelistfp, _pos=None, recomputepos=False, niter=None, posfp=None, lcc_only=False, gexffp=None, visnetfp=None, title='', v=False):
