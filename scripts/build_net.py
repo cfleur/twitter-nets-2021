@@ -87,7 +87,7 @@ def rt_source_to_target(tweetsdf, retweetsdf, ref_col='referenced_tweet_id', id_
 
 
 
-def process_hashtags(tweetsdf, tag_col='tags', plotdistro=False, figfp=None, v=True, vv=False):
+def process_hashtags(tweetsdf, tag_col='tags', tagusefp=None, tagspertweetfp=None, v=True, vv=False):
     ''' '''
 
     # investigate tag usage distribution
@@ -101,26 +101,28 @@ def process_hashtags(tweetsdf, tag_col='tags', plotdistro=False, figfp=None, v=T
     v and print('------\nAmount of tags used {} times or less: {} ({:.2f}%)'. format(use_threshold, sum(tag_counts <= use_threshold), sum(tag_counts <= use_threshold)/len(tag_counts)*100))
     v and print('------\nTop {} tags:\n{}'. format(n_top, top_tags))
 
-    if plotdistro:
+    if tagusefp:
         # uniform(-0.1, 0.1) adds jitter to x
         #i = [i+(i*r.uniform(-0.1, 0.1)) for i in range(0,len(tag_counts))]
-        i = [i for i in range(0,len(tag_counts))]
-        vv and print(len(tag_counts))
-        vv and print([(tc, i) for tc, i in zip(tag_counts,i)][0:50])
-        vv and print([(tc, i) for tc, i in zip(tag_counts,i)][-50:-1])
+        x = [i for i in range(0,len(tag_counts))]
+        y = tag_counts
+        if vv:
+            print(len(tag_counts))
+            print([(tc, i) for tc, i in zip(tag_counts,i)][0:50])
+            print([(tc, i) for tc, i in zip(tag_counts,i)][-50:-1])
         fig = plt.figure()
         title = 'Distribution of hashtag usage'
         fig.suptitle(title)
         ax = fig.add_subplot(1,1,1)
         ax.grid(axis='y', linestyle='--', linewidth=.42)
-        style = dict(marker='|', alpha=.42, c='navy', s=12)
-        ax.scatter(i, tag_counts, **style)
         ax.set(yscale='log', ylabel='hashtag usage count', xlabel='hashtag index no.')
-        fig.savefig(figfp)
-        v and print('------\nFigure "{}" has been written to {}'. format(title, figfp))
+        style = dict(marker='|', alpha=.42, c='navy', s=12)
+        ax.scatter(x, y, **style)
+        fig.savefig(tagusefp)
+        v and print('------\nFigure "{}" has been written to {}'. format(title, tagusefp))
 
+    ### Number of tags per tweet ###
     # tweets with 0, 1, and more than 1 tags:
-    # hashtags used in a tweet without any other hashtags are not a part of the network
     tweets_with_multiple_tags = tweetsdf[tweetsdf[tag_col].str.len() > 1]
     tweets_with_one_tag = tweetsdf[tweetsdf[tag_col].str.len() == 1]
     tweets_without_tags = tweetsdf[tweetsdf[tag_col].str.len() == 0]
@@ -129,16 +131,45 @@ def process_hashtags(tweetsdf, tag_col='tags', plotdistro=False, figfp=None, v=T
                 len(tweets_with_one_tag), len(tweets_with_one_tag)/len(tweetsdf)*100,
                 len(tweets_with_multiple_tags), len(tweets_with_multiple_tags)/len(tweetsdf)*100))
 
-    hashtagseries = tweets_with_multiple_tags[tag_col].explode()
+    if tagspertweetfp:
+        data = tweetsdf[tag_col].str.len().values
+        bins = max(data)
+        fig = plt.figure(figsize=(8,5))
+        title = 'Distribution of number of tags per tweet'
+        fig.suptitle(title)
+        ax1 = fig.add_subplot(1,2,1)
+        ax1.set(ylabel='number of occurances', xlabel='number of tags per tweet')
+        ax1.grid(axis='y', linestyle='--', linewidth=.42)
+        params1 = dict(color='navy', alpha=.82, log=False, density=False, align='left', rwidth=.82)
+        ax1.hist(data, bins=bins, **params1)
+        # add log version
+        ax2 = fig.add_subplot(1,2,2)
+        ax2.set(ylabel='', xlabel='number of tags per tweet')
+        ax2.grid(axis='y', linestyle='--', linewidth=.42)
+        params2 = dict(color='navy', alpha=.82, log=True, density=False, align='left', rwidth=.82)
+        ax2.hist(data, bins=bins, **params2)
+        fig.savefig(tagspertweetfp)
+        v and print('------\nFigure "{}" has been written to {}'. format(title, tagspertweetfp))
 
-    return hashtagseries, tag_counts
+    # hashtags used in a tweet without any other hashtags are not a part of the network
+    hashtagsdf = tweets_with_multiple_tags[tag_col]
+
+    return hashtagsdf, tag_counts
 
 
 
-def ht_source_to_target(hashtagseries, v=False):
-    '''A hashtag is linked to another if they appreared in the same tweet'''
-    pass
+def ht_source_to_target(hashtagsdf, v=False):
+    '''
+    A hashtag is linked to another if they appreared in the same tweet
+    Parameters
+    ----------
+    hashtagsdf: dataframe (tags column of tweetsdf)
+    '''
 
+    # check length of tag arrays
+    v and print('Min length tag array: {}. Max length tag array: {}.'. format(min(hashtagseries.str.len()), max(hashtagseries.str.len())))
+    
+    
 
 
 def write_edgelist(connectionlist, writefile=False, filepath=None, v=True, vv=False):
