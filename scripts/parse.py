@@ -32,6 +32,7 @@ def parse_tweets(pattern, rpath, root, v=False):
                                         'tweet_id': d['id'],
                                         'author_id': d['author_id'],
                                         'referenced_tweet_id': [re['id'] for re in d['referenced_tweets']],
+                                        'full_ref_data': d['referenced_tweets'],
                                         'tags': tags 
                                         })
                     else:
