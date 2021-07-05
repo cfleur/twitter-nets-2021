@@ -12,6 +12,7 @@ def parse_tweets(pattern, rpath, root, v=False):
     imatches = glob.iglob(root+rpath+pattern)
     retweets = []
     original_tweets = []
+    data_issue = []
     file_count = 0
 
     for match in imatches:
@@ -42,7 +43,7 @@ def parse_tweets(pattern, rpath, root, v=False):
                                         'tags': tags 
                                         })
                 except:
-                        original_tweets.append({
+                        data_issue.append({
                                         'created_at': d['created_at'],
                                         'tweet_id': d['id'],
                                         'author_id': d['author_id'],
@@ -53,4 +54,4 @@ def parse_tweets(pattern, rpath, root, v=False):
 
     v and print('***\n {} files parsed.\n***'. format(file_count))
 
-    return retweets, original_tweets
+    return retweets, original_tweets, data_issue
