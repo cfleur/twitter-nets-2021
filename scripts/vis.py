@@ -111,8 +111,8 @@ def vis_net_stats(rtg, htg, compute_paths=False, overviewfp=None, clusteringfp=N
             v and print('{} clustering coefficients computed'. format(name+'_lcc_clustering'))
 
         # histogram
-        subtitles = ['Retweet full clustering', 'Retweet lcc clustering', 'Hashtag full clustering', 'Hashtag lcc clustering']
-        for ax, title, ylab, d in zip(axs.flat, subtitles, ('observations', '', 'observations', ''), (data['retweets_full_clustering'], data['retweets_lcc_clustering'], data['hashtags_full_clustering'], data['hashtags_lcc_clustering'])):
+        subtitles = ['Retweet full clustering', 'Hashtag full clustering', 'Retweet lcc clustering', 'Hashtag lcc clustering']
+        for ax, title, ylab, d in zip(axs.flat, subtitles, ('observations', '', 'observations', ''), (data['retweets_full_clustering'], data['hashtags_full_clustering'], data['retweets_lcc_clustering'], data['hashtags_lcc_clustering'])):
             vv and print(len(d), ax, title)
             ax.hist(d, bins=300, **params)
             ax.set(title=title, ylabel=ylab, yscale='log')
