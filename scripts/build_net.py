@@ -3,17 +3,28 @@ from collections import Counter
 from datetime import timedelta
 import pandas as pd
 import numpy as np
+import matplotlib.pyplot as plt
+
+
 
 def format_tweets(tweets, retweets, ref_col='referenced_tweet_id', v=True, vv=False):
-    '''Check data and format as dataframes'''
+    '''
+    Check data and format as dataframes.
+    Takes a list of tweet objects and a list of retweet objects and returns them as dataframes.
+    Prints some summary statistics.
+    '''
 
     tweetsdf = pd.DataFrame(tweets)
     retweetsdf = pd.DataFrame(retweets)
+    v and print('Tweets formatted as dataframes. There are {} tweets and {} retweets.'. format(len(tweetsdf), len(retweetsdf)))
 
     # are all the original tweet references in the retweet dataset of length 1?
     lengths = np.unique([len(re) for re in retweetsdf[ref_col]])
     v and print('Unique lengths of referenced tweet column entries: {}'. format(lengths))
         
+    # check multi-referencing tweets
+    # multi-references means that a tweet references more than one original retweet, quote, reply
+    # at the same time.
     multi_ref_count = 0
 
     for i, re_id in enumerate(retweetsdf[ref_col]):
@@ -21,12 +32,13 @@ def format_tweets(tweets, retweets, ref_col='referenced_tweet_id', v=True, vv=Fa
             entry = retweetsdf.iloc[i]
             multi_ref_count += 1
             vv and print('\n {} \n full ref data: {}\n'. format(entry, entry.full_ref_data))
-    v and print('Number of multi-referenced entries: {}'. format(multi_ref_count))
-
+    v and print('Number of multi-referencing entries: {}'. format(multi_ref_count))
 
     return tweetsdf, retweetsdf
 
-def source_to_target(tweetsdf, retweetsdf, ref_col='referenced_tweet_id', id_col='tweet_id', author_col='author_id', v=False):
+
+
+def rt_source_to_target(tweetsdf, retweetsdf, ref_col='referenced_tweet_id', id_col='tweet_id', author_col='author_id', v=False):
     '''
     Takes a list of tweets and a list of retweets and identify source, targets,
     and counts number of timers a source connects to a targer (link weight)
@@ -74,13 +86,69 @@ def source_to_target(tweetsdf, retweetsdf, ref_col='referenced_tweet_id', id_col
     return connectionlist, data_issues, non_match_tracker
 
 
-def write_edgelist(connectionlist, filepath, v=True, vv=False):
+
+def process_hashtags(tweetsdf, tag_col='tags', plotdistro=False, figfp=None, v=True, vv=False):
+    ''' '''
+
+    # investigate tag usage distribution
+    tag_counts = tweetsdf[tag_col].explode().value_counts()
+    once_used_sum = sum(tag_counts == 1)
+    use_threshold = 10
+    n_top = 40
+    top_tags = tag_counts.head(n_top)
+    v and print('------\nAmount of unique tags: {}'. format(len(tag_counts)))
+    v and print('------\nAmount of tags used only once: {} ({:.2f}%)'. format(once_used_sum, once_used_sum/len(tag_counts)*100))
+    v and print('------\nAmount of tags used {} times or less: {} ({:.2f}%)'. format(use_threshold, sum(tag_counts <= use_threshold), sum(tag_counts <= use_threshold)/len(tag_counts)*100))
+    v and print('------\nTop {} tags:\n{}'. format(n_top, top_tags))
+
+    if plotdistro:
+        # uniform(-0.1, 0.1) adds jitter to x
+        #i = [i+(i*r.uniform(-0.1, 0.1)) for i in range(0,len(tag_counts))]
+        i = [i for i in range(0,len(tag_counts))]
+        vv and print(len(tag_counts))
+        vv and print([(tc, i) for tc, i in zip(tag_counts,i)][0:50])
+        vv and print([(tc, i) for tc, i in zip(tag_counts,i)][-50:-1])
+        fig = plt.figure()
+        title = 'Distribution of hashtag usage'
+        fig.suptitle(title)
+        ax = fig.add_subplot(1,1,1)
+        ax.grid(axis='y', linestyle='--', linewidth=.42)
+        style = dict(marker='|', alpha=.42, c='navy', s=12)
+        ax.scatter(i, tag_counts, **style)
+        ax.set(yscale='log', ylabel='hashtag usage count', xlabel='hashtag index no.')
+        fig.savefig(figfp)
+        v and print('------\nFigure "{}" has been written to {}'. format(title, figfp))
+
+    # tweets with 0, 1, and more than 1 tags:
+    # hashtags used in a tweet without any other hashtags are not a part of the network
+    tweets_with_multiple_tags = tweetsdf[tweetsdf[tag_col].str.len() > 1]
+    tweets_with_one_tag = tweetsdf[tweetsdf[tag_col].str.len() == 1]
+    tweets_without_tags = tweetsdf[tweetsdf[tag_col].str.len() == 0]
+    v and print('------\nTweets with no tags {} ({:.4f}%).\nTweets with one tag {} ({:.4f}%).\nTweets with multiple tags {} ({:.4f}%).'. 
+            format(len(tweets_without_tags), len(tweets_without_tags)/len(tweetsdf)*100,
+                len(tweets_with_one_tag), len(tweets_with_one_tag)/len(tweetsdf)*100,
+                len(tweets_with_multiple_tags), len(tweets_with_multiple_tags)/len(tweetsdf)*100))
+
+    hashtagseries = tweets_with_multiple_tags[tag_col].explode()
+
+    return hashtagseries, tag_counts
+
+
+
+def ht_source_to_target(hashtagseries, v=False):
+    '''A hashtag is linked to another if they appreared in the same tweet'''
+    pass
+
+
+
+def write_edgelist(connectionlist, writefile=False, filepath=None, v=True, vv=False):
     '''Writes edgelist file. '''
     
     c = Counter()    
     connectiondf = pd.DataFrame(connectionlist)
     setname = 'sourcetargetfs'
     links = []
+    self_rt = 0
 
     # transform connection list into frozen set
     connectiondf[setname] = [frozenset([i, j]) for i, j in zip(connectiondf['source'], connectiondf['target'])]
@@ -89,12 +157,17 @@ def write_edgelist(connectionlist, filepath, v=True, vv=False):
     for fs in connectiondf[setname]:
         c[fs] += 1
 
-    for i in c.items():
+    unique_connections = c.items()
+    # the order of Counter.items() might be non-deterministic
+    v and print('------\nThere are {} unique connections'. format(len(unique_connections)))
+
+    # parse links
+    for i in unique_connections:
 
         if len(i[0]) == 1:
             # author retweeted/replied/quoted themselves
             # network does not have self loops
-            pass
+            self_rt += 1
         
         elif len(i[0]) == 2:
             # correct length
@@ -109,7 +182,10 @@ def write_edgelist(connectionlist, filepath, v=True, vv=False):
         else:
             print('source target length issue:\n{}'. format(i))
 
-    v and print('{} links recorded. Example link:\n{}\n\nWriting to file {}.'. format(len(links), links[100], filepath))
+    v and print('------\n{} ({:.2f}%) are self- retweets/replies/qoutes.\nThese are not included in the edgelist (no self-loops).'. format(self_rt, self_rt/len(unique_connections)*100))
+    v and print('------\n{} links recorded. Example link:\n{}'. format(len(links), links[10]))
 
-    with open(filepath, 'w') as f:
-        f.writelines(links)
+    if writefile:
+        with open(filepath, 'w') as f:
+            f.writelines(links)
+        v and print('-----\nEdgelist written to file {}.'. format(filepath))
