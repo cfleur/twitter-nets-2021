@@ -92,37 +92,6 @@ def rt_source_to_target(tweetsdf, retweetsdf, ref_col='referenced_tweet_id', id_
 def process_hashtags(tweetsdf, tag_col='tags', tagusefp=None, tagspertweetfp=None, v=True, vv=False):
     ''' '''
 
-    # investigate tag usage distribution
-    tag_counts = tweetsdf[tag_col].explode().value_counts()
-    once_used_sum = sum(tag_counts == 1)
-    use_threshold = 10
-    n_top = 40
-    top_tags = tag_counts.head(n_top)
-    v and print('------\nAmount of unique tags: {}'. format(len(tag_counts)))
-    v and print('------\nAmount of tags used only once: {} ({:.2f}%)'. format(once_used_sum, once_used_sum/len(tag_counts)*100))
-    v and print('------\nAmount of tags used {} times or less: {} ({:.2f}%)'. format(use_threshold, sum(tag_counts <= use_threshold), sum(tag_counts <= use_threshold)/len(tag_counts)*100))
-    v and print('------\nTop {} tags:\n{}'. format(n_top, top_tags))
-
-    if tagusefp:
-        # uniform(-0.1, 0.1) adds jitter to x
-        #i = [i+(i*r.uniform(-0.1, 0.1)) for i in range(0,len(tag_counts))]
-        x = [i for i in range(0,len(tag_counts))]
-        y = tag_counts
-        if vv:
-            print(len(tag_counts))
-            print([(tc, i) for tc, i in zip(tag_counts,i)][0:50])
-            print([(tc, i) for tc, i in zip(tag_counts,i)][-50:-1])
-        fig = plt.figure()
-        title = 'Distribution of hashtag usage'
-        fig.suptitle(title)
-        ax = fig.add_subplot(1,1,1)
-        ax.grid(axis='y', linestyle='--', linewidth=.42)
-        ax.set(yscale='log', ylabel='hashtag usage count', xlabel='hashtag index no.')
-        style = dict(marker='|', alpha=.42, c='navy', s=12)
-        ax.scatter(x, y, **style)
-        fig.savefig(tagusefp)
-        v and print('------\nFigure "{}" has been written to {}'. format(title, tagusefp))
-
     ### Number of tags per tweet ###
     # tweets with 0, 1, and more than 1 tags:
     tweets_with_multiple_tags = tweetsdf[tweetsdf[tag_col].str.len() > 1]
@@ -152,6 +121,37 @@ def process_hashtags(tweetsdf, tag_col='tags', tagusefp=None, tagspertweetfp=Non
         ax2.hist(data, bins=bins, **params2)
         fig.savefig(tagspertweetfp)
         v and print('------\nFigure "{}" has been written to {}'. format(title, tagspertweetfp))
+
+    # investigate tag usage distribution
+    tag_counts = tweets_with_multiple_tags[tag_col].explode().value_counts()
+    once_used_sum = sum(tag_counts == 1)
+    use_threshold = 10
+    n_top = 40
+    top_tags = tag_counts.head(n_top)
+    v and print('------\nAmount of unique tags: {}'. format(len(tag_counts)))
+    v and print('------\nAmount of tags used only once: {} ({:.2f}%)'. format(once_used_sum, once_used_sum/len(tag_counts)*100))
+    v and print('------\nAmount of tags used {} times or less: {} ({:.2f}%)'. format(use_threshold, sum(tag_counts <= use_threshold), sum(tag_counts <= use_threshold)/len(tag_counts)*100))
+    v and print('------\nTop {} tags:\n{}'. format(n_top, top_tags))
+
+    if tagusefp:
+        # uniform(-0.1, 0.1) adds jitter to x
+        #i = [i+(i*r.uniform(-0.1, 0.1)) for i in range(0,len(tag_counts))]
+        x = [i for i in range(0,len(tag_counts))]
+        y = tag_counts
+        if vv:
+            print(len(tag_counts))
+            print([(tc, i) for tc, i in zip(tag_counts,i)][0:50])
+            print([(tc, i) for tc, i in zip(tag_counts,i)][-50:-1])
+        fig = plt.figure()
+        title = 'Distribution of hashtag usage'
+        fig.suptitle(title)
+        ax = fig.add_subplot(1,1,1)
+        ax.grid(axis='y', linestyle='--', linewidth=.42)
+        ax.set(yscale='log', ylabel='hashtag usage count', xlabel='hashtag index no.')
+        style = dict(marker='|', alpha=.42, c='navy', s=12)
+        ax.scatter(x, y, **style)
+        fig.savefig(tagusefp)
+        v and print('------\nFigure "{}" has been written to {}'. format(title, tagusefp))
 
     # hashtags used in a tweet without any other hashtags are not a part of the network
     hashtags = tweets_with_multiple_tags[tag_col]
